@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/miku ocr logo v1.png" alt="Miku OCR logo" width="200">
+</p>
+
 # Miku OCR
 
 A Telegram bot that "reads" text out of images for you — paste, send, or forward
@@ -49,7 +53,7 @@ while staying accurate for OCR-style transcription.
 
 5. **Run it**
    ```bash
-   python bot.py
+   python main.py
    ```
    The bot polls Telegram for updates — no public URL or webhook needed for
    local/simple deployments. For always-on hosting, deploy this the same way
@@ -68,6 +72,6 @@ while staying accurate for OCR-style transcription.
 
 ## File overview
 
-- `bot.py` — the whole bot: Telegram handlers + Claude OCR call
+- `main.py` — the whole bot: Telegram handlers + Claude OCR call
 - `requirements.txt` — pinned dependencies
 - `.env.example` — template for required secrets

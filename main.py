@@ -14,6 +14,7 @@ import base64
 import io
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -181,14 +182,22 @@ def _import_random():
 # ---------------------------------------------------------------------------
 
 
+LOGO_PATH = Path(__file__).parent / "assets" / "miku ocr logo v1.png"
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
+    caption = (
         "Hi, I'm Miku OCR! 🎤📸\n\n"
         "Send me a photo, paste an image, or forward one from another chat, "
         "and I'll read the English text out of it for you — copy-paste ready.\n\n"
         "Right now I only read English. Multi-language support, translation, "
         "table extraction, and editable docs are coming soon!"
     )
+    if LOGO_PATH.exists():
+        with open(LOGO_PATH, "rb") as logo:
+            await update.message.reply_photo(photo=logo, caption=caption)
+    else:
+        await update.message.reply_text(caption)
 
 
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
