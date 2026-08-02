@@ -55,6 +55,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("miku-ocr")
 
+# httpx logs full request URLs at INFO, and Telegram's API puts the bot
+# token in the URL path — silence it to keep the token out of the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
 SYSTEM_PROMPT = """You are the OCR engine behind a Telegram bot called Miku OCR.
