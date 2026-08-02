@@ -6,7 +6,7 @@ the transcribed English text in a copy-friendly code block.
 
 Run:
     export TELEGRAM_BOT_TOKEN="..."
-    export ANTHROPIC_API_KEY="..."
+    export FREELLMAPI_API_KEY="..."
     python bot.py
 """
 
@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from anthropic import Anthropic
+from openai import OpenAI
 from PIL import Image
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
@@ -37,16 +37,21 @@ from telegram.ext import (
 # ---------------------------------------------------------------------------
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+FREELLMAPI_API_KEY = os.environ["FREELLMAPI_API_KEY"]
 
-# Latest Haiku — fast + cheap, which is exactly what OCR-in-a-loop needs.
-MODEL = "claude-haiku-4-5-20251001"
+# Self-hosted FreeLLMAPI instance (https://github.com/tashfeenahmed/freellmapi),
+# an OpenAI-compatible router over free-tier quota from multiple providers.
+FREELLMAPI_BASE_URL = os.environ.get("FREELLMAPI_BASE_URL", "http://localhost:3001/v1")
 
-# Claude's vision encoder tops out around this edge length; anything bigger
-# just burns tokens without adding OCR accuracy, so we downscale first.
+# "auto" lets the router's fallback chain pick a vision-capable free-tier
+# model; pin this to a specific model id if you want deterministic behaviour.
+MODEL = os.environ.get("FREELLMAPI_MODEL", "auto")
+
+# Most vision-capable free-tier models top out around this edge length;
+# anything bigger just burns tokens without adding OCR accuracy.
 MAX_EDGE_PX = 1568
 
-# Anthropic image payload cap is ~5MB base64; keep comfortably under it.
+# Keep the base64 payload comfortably under typical free-tier upload caps.
 MAX_UPLOAD_MB = 20
 
 logging.basicConfig(
@@ -59,7 +64,7 @@ logger = logging.getLogger("miku-ocr")
 # token in the URL path — silence it to keep the token out of the logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-anthropic_client = Anthropic(api_key=ANTHROPIC_API_KEY)
+llm_client = OpenAI(api_key=FREELLMAPI_API_KEY, base_url=FREELLMAPI_BASE_URL)
 
 SYSTEM_PROMPT = """You are the OCR engine behind a Telegram bot called Miku OCR.
 Your only job is to transcribe English text visible in the supplied image, exactly
@@ -145,34 +150,30 @@ def _prep_image(raw: bytes) -> tuple[bytes, str]:
 
 def _run_ocr(image_bytes: bytes, media_type: str) -> str:
     b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+    data_uri = f"data:{media_type};base64,{b64}"
 
-    response = anthropic_client.messages.create(
+    response = llm_client.chat.completions.create(
         model=MODEL,
         max_tokens=4096,
-        system=SYSTEM_PROMPT,
         messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": [
                     {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64,
-                        },
-                    },
-                    {
                         "type": "text",
                         "text": "Transcribe the English text in this image.",
                     },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_uri},
+                    },
                 ],
-            }
+            },
         ],
     )
 
-    parts = [block.text for block in response.content if block.type == "text"]
-    return "".join(parts).strip()
+    return (response.choices[0].message.content or "").strip()
 
 
 def _import_random():
@@ -313,7 +314,7 @@ def main() -> None:
         )
     )
 
-    logger.info("Miku OCR is online using model %s", MODEL)
+    logger.info("Miku OCR is online using model %s via %s", MODEL, FREELLMAPI_BASE_URL)
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
