@@ -14,7 +14,7 @@
 
 ---
 
-![Hero screenshot](assets/miku ocr logo v1.png)
+![Hero screenshot](assets/miku%20ocr%20logo%20v1.png)
 
 ## What it does
 
