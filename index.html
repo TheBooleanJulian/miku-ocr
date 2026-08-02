@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Miku OCR — a Telegram bot that reads your screenshots</title>
+<meta name="description" content="Send Miku a photo, a screenshot, or a forwarded image. She reads the English text inside it and hands it back copy-paste ready.">
+<link rel="icon" href="assets/miku%20ocr%20logo%20v1.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Literata:ital,opsz,wght@0,18..144,400;0,18..144,500;0,18..144,600;1,18..144,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#182A2D;
+    --ink-soft:#3C5155;
+    --parchment:#F5EFDD;
+    --parchment-hi:#FBF7EB;
+    --parchment-line:#E4D9BB;
+    --card:#FFFCF3;
+    --teal:#1F8C82;
+    --teal-deep:#12554E;
+    --teal-bright:#3BB6AA;
+    --brass:#B4842E;
+    --ruby:#9C3630;
+    --shadow: 0 1px 0 rgba(24,42,45,.05), 0 12px 28px -18px rgba(24,42,45,.35);
+  }
+
+  :root[data-theme="dark"]{
+    --ink:#EDE7D6;
+    --ink-soft:#B9C7C5;
+    --parchment:#0F1B1C;
+    --parchment-hi:#152625;
+    --parchment-line:#26403E;
+    --card:#132322;
+    --teal:#4FCABD;
+    --teal-deep:#8FE0D6;
+    --teal-bright:#63DDD0;
+    --brass:#E0B563;
+    --ruby:#E17F78;
+    --shadow: 0 1px 0 rgba(0,0,0,.3), 0 18px 34px -18px rgba(0,0,0,.6);
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EDE7D6;
+      --ink-soft:#B9C7C5;
+      --parchment:#0F1B1C;
+      --parchment-hi:#152625;
+      --parchment-line:#26403E;
+      --card:#132322;
+      --teal:#4FCABD;
+      --teal-deep:#8FE0D6;
+      --teal-bright:#63DDD0;
+      --brass:#E0B563;
+      --ruby:#E17F78;
+      --shadow: 0 1px 0 rgba(0,0,0,.3), 0 18px 34px -18px rgba(0,0,0,.6);
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 14% 8%, color-mix(in srgb, var(--teal) 10%, transparent), transparent 40%),
+      var(--parchment);
+    color:var(--ink);
+    font-family:'Literata', Georgia, serif;
+    font-size:17px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  img{max-width:100%;display:block;}
+  a{color:inherit;}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px;}
+
+  h1,h2,h3,.display{
+    font-family:'Baloo 2', ui-rounded, system-ui, sans-serif;
+    font-weight:700;
+    text-wrap:balance;
+    letter-spacing:.2px;
+    color:var(--ink);
+  }
+
+  .eyebrow{
+    font-family:'JetBrains Mono', ui-monospace, monospace;
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--teal-deep);
+    font-weight:500;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky; top:0; z-index:20;
+    background:color-mix(in srgb, var(--parchment) 86%, transparent);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--parchment-line);
+  }
+  .nav{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px;
+  }
+  .brand{display:flex; align-items:center; gap:10px; text-decoration:none;}
+  .brand img{width:34px; height:34px; border-radius:50%; box-shadow:var(--shadow);}
+  .brand span{font-family:'Baloo 2', sans-serif; font-weight:700; font-size:1.15rem;}
+  .nav-cta{
+    font-family:'Baloo 2', sans-serif; font-weight:600; font-size:.92rem;
+    background:var(--teal); color:var(--parchment-hi);
+    padding:9px 18px; border-radius:999px; text-decoration:none;
+    box-shadow:var(--shadow);
+    transition:transform .15s ease, background .15s ease;
+  }
+  .nav-cta:hover{background:var(--teal-deep); transform:translateY(-1px);}
+
+  /* ---------- hero ---------- */
+  .hero{
+    padding:76px 0 64px;
+    display:grid;
+    grid-template-columns:1.15fr .85fr;
+    gap:56px;
+    align-items:center;
+  }
+  .hero h1{font-size:clamp(2.3rem, 4.4vw, 3.4rem); line-height:1.08; margin:14px 0 18px;}
+  .hero h1 .accent{color:var(--teal);}
+  .hero p.lede{
+    font-size:1.14rem; color:var(--ink-soft); max-width:46ch; margin:0 0 30px;
+  }
+  .hero-actions{display:flex; gap:14px; flex-wrap:wrap; align-items:center;}
+  .btn-primary{
+    font-family:'Baloo 2', sans-serif; font-weight:700; font-size:1.02rem;
+    background:var(--teal); color:var(--parchment-hi);
+    padding:14px 26px; border-radius:12px; text-decoration:none;
+    box-shadow:var(--shadow);
+    transition:transform .15s ease, background .15s ease;
+  }
+  .btn-primary:hover{background:var(--teal-deep); transform:translateY(-2px);}
+  .btn-ghost{
+    font-family:'JetBrains Mono', monospace; font-size:.88rem;
+    color:var(--ink-soft); text-decoration:none; border-bottom:1px dashed var(--parchment-line);
+    padding-bottom:2px;
+  }
+  .btn-ghost:hover{color:var(--teal-deep); border-color:var(--teal-deep);}
+
+  .hero-badge{
+    position:relative;
+    display:flex; justify-content:center;
+  }
+  .badge-frame{
+    position:relative;
+    width:min(320px, 80%);
+    border-radius:50%;
+    overflow:hidden;
+    box-shadow: var(--shadow), 0 0 0 6px var(--card), 0 0 0 7px var(--parchment-line);
+  }
+  .badge-frame img{width:100%; height:100%; object-fit:cover;}
+  .scan-line{
+    position:absolute; left:0; right:0; height:34%;
+    background:linear-gradient(180deg, transparent, color-mix(in srgb, var(--teal-bright) 55%, transparent) 45%, transparent);
+    mix-blend-mode:screen;
+    animation:scan 4.5s ease-in-out infinite;
+  }
+  @keyframes scan{
+    0%,100%{ top:-10%; }
+    50%{ top:78%; }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .scan-line{animation:none; display:none;}
+    html{scroll-behavior:auto;}
+  }
+
+  /* ---------- sections ---------- */
+  section{padding:56px 0;}
+  .section-head{max-width:60ch; margin-bottom:34px;}
+  .section-head h2{font-size:clamp(1.6rem,2.6vw,2.1rem); margin:10px 0 8px;}
+  .section-head p{color:var(--ink-soft); margin:0;}
+
+  hr.rule{
+    border:none; height:1px;
+    background:linear-gradient(90deg, transparent, var(--parchment-line) 15%, var(--parchment-line) 85%, transparent);
+    margin:0;
+  }
+
+  /* ---------- demo (chat mock) ---------- */
+  .demo{
+    background:var(--card);
+    border:1px solid var(--parchment-line);
+    border-radius:20px;
+    padding:28px;
+    box-shadow:var(--shadow);
+    max-width:560px;
+  }
+  .msg{display:flex; gap:10px; margin-bottom:16px; align-items:flex-end;}
+  .msg:last-child{margin-bottom:0;}
+  .msg .avatar{
+    width:30px; height:30px; border-radius:50%; flex:none;
+    background:var(--parchment-line);
+    background-size:cover; background-position:center;
+  }
+  .msg.user{flex-direction:row-reverse;}
+  .bubble{
+    padding:11px 15px; border-radius:16px; font-size:.95rem;
+    max-width:78%;
+  }
+  .msg.user .bubble{
+    background:var(--teal); color:var(--parchment-hi);
+    border-bottom-right-radius:4px;
+    font-family:'Literata', serif;
+  }
+  .msg.bot .bubble{
+    background:var(--parchment-hi); color:var(--ink);
+    border:1px solid var(--parchment-line);
+    border-bottom-left-radius:4px;
+  }
+  .bubble.mono{
+    font-family:'JetBrains Mono', monospace; font-size:.82rem; line-height:1.6;
+    white-space:pre-wrap;
+  }
+  .photo-chip{
+    display:flex; align-items:center; gap:8px;
+    font-family:'JetBrains Mono', monospace; font-size:.8rem;
+  }
+  .photo-chip svg{flex:none;}
+
+  /* ---------- features ---------- */
+  .grid{
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:16px;
+  }
+  .feature{
+    background:var(--card);
+    border:1px solid var(--parchment-line);
+    border-radius:14px;
+    padding:20px 22px;
+  }
+  .feature .mark{
+    display:inline-flex; width:30px; height:30px; border-radius:8px;
+    background:color-mix(in srgb, var(--teal) 14%, transparent);
+    color:var(--teal-deep);
+    align-items:center; justify-content:center;
+    margin-bottom:10px;
+  }
+  .feature h3{font-size:1.02rem; margin:0 0 6px;}
+  .feature p{margin:0; color:var(--ink-soft); font-size:.93rem;}
+
+  /* ---------- steps ---------- */
+  .steps{
+    display:grid; grid-template-columns:auto 1fr; gap:6px 20px;
+  }
+  .step-num{
+    font-family:'Baloo 2', sans-serif; font-weight:800; font-size:1.3rem;
+    color:var(--teal); width:44px;
+    font-variant-numeric:tabular-nums;
+  }
+  .step{padding-bottom:26px; border-left:2px solid var(--parchment-line); padding-left:20px; margin-left:22px; position:relative;}
+  .step:last-child{border-color:transparent; padding-bottom:0;}
+  .step::before{
+    content:''; position:absolute; left:-7px; top:2px;
+    width:12px; height:12px; border-radius:50%;
+    background:var(--teal); box-shadow:0 0 0 4px var(--parchment);
+  }
+  .step h3{margin:0 0 4px; font-size:1.04rem;}
+  .step p{margin:0; color:var(--ink-soft); font-size:.94rem;}
+
+  /* ---------- roadmap ---------- */
+  .roadmap-list{list-style:none; margin:0; padding:0; display:grid; gap:10px;}
+  .roadmap-list li{
+    display:flex; gap:10px; align-items:baseline;
+    font-family:'JetBrains Mono', monospace; font-size:.88rem; color:var(--ink-soft);
+  }
+  .roadmap-list li::before{content:'○'; color:var(--brass); flex:none;}
+
+  /* ---------- final cta ---------- */
+  .cta-block{
+    text-align:center;
+    background:linear-gradient(180deg, var(--parchment-hi), var(--card));
+    border:1px solid var(--parchment-line);
+    border-radius:24px;
+    padding:56px 24px;
+  }
+  .cta-block h2{font-size:clamp(1.7rem,3vw,2.3rem); margin:0 0 10px;}
+  .cta-block p{color:var(--ink-soft); margin:0 0 26px;}
+
+  footer{
+    padding:32px 0 48px;
+    display:flex; flex-wrap:wrap; gap:14px;
+    align-items:center; justify-content:space-between;
+    font-family:'JetBrains Mono', monospace; font-size:.82rem;
+    color:var(--ink-soft);
+  }
+  footer a{text-decoration:none; border-bottom:1px dashed var(--parchment-line);}
+  footer a:hover{color:var(--teal-deep); border-color:var(--teal-deep);}
+  footer .foot-links{display:flex; gap:18px;}
+
+  @media (max-width:760px){
+    .hero{grid-template-columns:1fr; padding-top:44px;}
+    .hero-badge{order:-1;}
+    .grid{grid-template-columns:1fr;}
+    .nav-cta{padding:8px 14px; font-size:.85rem;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="nav wrap">
+    <a class="brand" href="#top">
+      <img src="assets/miku%20ocr%20logo%20v1.png" alt="">
+      <span>Miku OCR</span>
+    </a>
+    <a class="nav-cta" href="https://t.me/mikuocrbot" target="_blank" rel="noopener">Message @mikuocrbot</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <div>
+      <p class="eyebrow">Telegram bot &middot; built on Claude Haiku 4.5</p>
+      <h1>Miku reads the <span class="accent">fine print</span> so you don't have to.</h1>
+      <p class="lede">Send her a photo, a screenshot, or a forwarded meme with text buried in it. She'll transcribe every English word into a clean block you can copy with one tap — no retyping, no squinting.</p>
+      <div class="hero-actions">
+        <a class="btn-primary" href="https://t.me/mikuocrbot" target="_blank" rel="noopener">Open in Telegram &rarr;</a>
+        <a class="btn-ghost" href="https://github.com/TheBooleanJulian/miku-ocr" target="_blank" rel="noopener">view source</a>
+      </div>
+    </div>
+    <div class="hero-badge">
+      <div class="badge-frame">
+        <img src="assets/miku%20ocr%20logo%20v1.png" alt="Miku OCR — a teal-haired detective holding a monocle up to her eye">
+        <div class="scan-line" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">See it happen</p>
+      <h2>Watch her work</h2>
+      <p>One photo in, one clean transcript out.</p>
+    </div>
+
+    <div class="demo">
+      <div class="msg user">
+        <div class="bubble">
+          <div class="photo-chip">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="M3 16l5-4 4 3 4-5 5 6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            receipt_faded.jpg
+          </div>
+        </div>
+      </div>
+      <div class="msg bot">
+        <div class="bubble">Give Miku a second to read this properly&hellip;</div>
+      </div>
+      <div class="msg bot">
+        <div class="bubble mono">CAFE MERIDIAN
+123 Harbor St, Unit 4
+------------------------
+1x Cold Brew        4.75
+1x Almond Croissant  3.95
+------------------------
+Subtotal            8.70
+Tax                  0.78
+Total               9.48
+
+Thank you for visiting!</div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What she's good at</p>
+      <h2>Built for the images people actually send</h2>
+    </div>
+    <div class="grid">
+      <div class="feature">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 8V6a2 2 0 0 1 2-2h2M4 16v2a2 2 0 0 0 2 2h2M20 8V6a2 2 0 0 0-2-2h-2M20 16v2a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <h3>Photos, pastes, or forwards</h3>
+        <p>Send a photo directly, paste one from your clipboard, or forward it from another chat — she reads all three the same way.</p>
+      </div>
+      <div class="feature">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 3v5h5M6 3h8l5 5v13H6z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        </span>
+        <h3>Uncompressed files too</h3>
+        <p>Images sent as Telegram "documents" work just as well as regular photo uploads — no quality gets stripped first.</p>
+      </div>
+      <div class="feature">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M7 9h10M7 13h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <h3>Tap-and-hold to copy</h3>
+        <p>Transcripts come back in a monospace block, formatted for a single copy — straight into a note, a form, or a message.</p>
+      </div>
+      <div class="feature">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h3>Cheap to run at volume</h3>
+        <p>Images are downscaled before upload and every read runs on Claude Haiku 4.5 — accurate transcription without the API bill.</p>
+      </div>
+      <div class="feature">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 12h5l2-7 4 14 2-7h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h3>Nothing gets truncated</h3>
+        <p>Long transcripts are split across multiple messages automatically, so a dense page of text still arrives in full.</p>
+      </div>
+      <div class="feature">
+        <span class="mark">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.7"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <h3>No setup, no waiting</h3>
+        <p>There's no account to create — message the bot and the first reply is your first transcription.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Under the hood</p>
+      <h2>Four steps, no typing</h2>
+    </div>
+    <div>
+      <div class="step">
+        <h3>Send</h3>
+        <p>Drop in a photo, a clipboard paste, or a forwarded image with English text somewhere in it.</p>
+      </div>
+      <div class="step">
+        <h3>Downscale</h3>
+        <p>The image is resized to Claude's useful resolution ceiling and re-encoded as JPEG — the single biggest lever on cost, with no real accuracy loss.</p>
+      </div>
+      <div class="step">
+        <h3>Read</h3>
+        <p>Claude Haiku 4.5 transcribes every line of English it can find, ignoring logos, watermarks, and decorative noise.</p>
+      </div>
+      <div class="step">
+        <h3>Copy</h3>
+        <p>The transcript comes back as a monospace block. Tap and hold, copy, paste it wherever it needed to go.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Not yet, but soon</p>
+      <h2>On the workbench</h2>
+      <p>Miku only reads English today. These are next.</p>
+    </div>
+    <ul class="roadmap-list">
+      <li>Multi-language OCR</li>
+      <li>Translation of the extracted text</li>
+      <li>Table-aware extraction for structured, tabular images</li>
+      <li>Export straight to an editable document</li>
+    </ul>
+  </section>
+
+  <section class="wrap">
+    <div class="cta-block">
+      <h2>Got a screenshot full of text?</h2>
+      <p>Send it to Miku — the reply is usually back before you've switched apps.</p>
+      <a class="btn-primary" href="https://t.me/mikuocrbot" target="_blank" rel="noopener">Message @mikuocrbot &rarr;</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <span>Miku OCR &middot; MIT licensed</span>
+  <span class="foot-links">
+    <a href="https://github.com/TheBooleanJulian/miku-ocr" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/TheBooleanJulian" target="_blank" rel="noopener">@TheBooleanJulian</a>
+    <a href="https://t.me/mikuocrbot" target="_blank" rel="noopener">Telegram</a>
+  </span>
+</footer>
+
+</body>
+</html>
