@@ -2,12 +2,12 @@
 
 # Miku OCR
 
-**A Telegram bot that reads text out of images and hands it back as clean, copy-paste-ready English.**
+**A Telegram bot that reads text out of images — English, Japanese, or Chinese — and hands it back clean and copy-paste-ready, with optional translation between the three.**
 
-![Version](https://img.shields.io/badge/version-0.4.0-00D4C8)
+![Version](https://img.shields.io/badge/version-0.5.0-00D4C8)
 ![Python](https://img.shields.io/badge/-Python-3776AB?logo=python&logoColor=white)
 ![Telegram](https://img.shields.io/badge/-Telegram-26A5E4?logo=telegram&logoColor=white)
-![Claude](https://img.shields.io/badge/-Claude%20API-D4A017)
+![FreeLLMAPI](https://img.shields.io/badge/-FreeLLMAPI-D4A017)
 ![License](https://img.shields.io/badge/license-AGPLv3%20%2F%20Commercial-00D4C8.svg)
 
 </div>
@@ -18,23 +18,27 @@
 
 ## What it does
 
-Miku OCR is a Telegram bot that transcribes English text from any image you send it. Forward a screenshot, paste a photo from clipboard, or drop an uncompressed file — Miku calls Claude Haiku 4.5 to do the heavy lifting and returns the result in a monospace block you can tap-and-hold to copy in one go. Images are automatically downscaled before the API call to keep token costs low without hurting accuracy.
+Miku OCR is a Telegram bot that transcribes English, Japanese, or Chinese text from any image you send it. Forward a screenshot, paste a photo from clipboard, or drop an uncompressed file — Miku reads the text and returns it in a monospace block you can tap-and-hold to copy in one go. By default she just transcribes; send `/translate en`, `/translate ja`, or `/translate zh` to have her translate between the three languages instead, and `/translate off` to go back to transcribe-only. Images are automatically downscaled before the API call to keep costs low without hurting accuracy.
+
+Miku runs on a self-hosted [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) instance — an OpenAI-compatible proxy that routes requests across free-tier quota from multiple LLM providers — rather than a paid API key.
 
 ## Features
 
 - Accepts photos sent directly, pasted from clipboard, or forwarded from other chats
 - Also accepts images sent as Telegram "Document" (uncompressed) files
-- Returns transcribed text in a monospace block for easy one-tap copying
+- Reads English, Japanese, and Chinese
+- Optional translation between those three languages via `/translate <en|ja|zh>` (transcribe-only by default; `/translate off` to revert)
+- Returns text in a monospace block for easy one-tap copying
 - Downscales images to a max edge of 1568px and re-encodes as JPEG before upload — the primary cost-control lever
 - Splits very long transcripts across multiple messages so nothing is truncated
-- Runs on Claude Haiku 4.5 — fast and cheap enough to run at volume
+- Runs on free-tier vision models via a self-hosted FreeLLMAPI proxy
 
 ## Tech Stack
 
 | Layer | Choice |
 |---|---|
 | Bot | python-telegram-bot 21.6 (polling) |
-| AI | Claude API — `claude-haiku-4-5-20251001` |
+| AI | Free-tier vision models via a self-hosted [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) proxy (OpenAI-compatible) |
 | Image processing | Pillow |
 
 ## Quick Start
@@ -44,18 +48,20 @@ git clone <repo>
 cd miku-ocr
 pip install -r requirements.txt
 cp .env.example .env
-# fill in both values in .env
+# fill in the values in .env — see Configuration below
 python main.py
 ```
 
-The bot polls Telegram for updates — no public URL or webhook needed.
+The bot polls Telegram for updates — no public URL or webhook needed. You'll also need a running FreeLLMAPI instance (self-hosted; see its repo for setup) with at least one vision-capable provider key configured.
 
 ## Configuration
 
 | Variable | Required | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | ✅ | Token from [@BotFather](https://t.me/BotFather) |
-| `ANTHROPIC_API_KEY` | ✅ | API key from the [Claude Console](https://console.anthropic.com/) |
+| `FREELLMAPI_API_KEY` | ✅ | Unified key from your self-hosted FreeLLMAPI dashboard |
+| `FREELLMAPI_BASE_URL` | ❌ | FreeLLMAPI's `/v1` endpoint. Defaults to `http://localhost:3001/v1` |
+| `FREELLMAPI_MODEL` | ❌ | Model id to pin, or `auto` (default) to use FreeLLMAPI's fallback chain |
 
 ## Project Structure
 
@@ -76,14 +82,15 @@ miku-ocr/
 
 - [x] Photo, clipboard paste, and forwarded image handling
 - [x] Uncompressed file (Document) image handling
-- [x] Claude Haiku OCR with monospace output block
+- [x] OCR with monospace output block
 - [x] Image downscaling and JPEG re-encoding for cost control
 - [x] Long transcript splitting across multiple messages
+- [x] English, Japanese, and Chinese OCR
+- [x] Optional translation between English, Japanese, and Chinese via `/translate`
+- [x] Migrated from the Claude API to a self-hosted FreeLLMAPI proxy over free-tier providers
 
 **Planned / Suggestions**
 
-- Multi-language OCR support
-- Translation of extracted text
 - Table-aware / structured extraction for tabular images
 - Export to an editable document format (Word / Google Docs)
 - Automated tests for the Telegram handlers and OCR integration
@@ -97,6 +104,7 @@ miku-ocr/
 
 Versioned with [semantic versioning](https://semver.org/) — MAJOR for breaking changes, MINOR for new features, PATCH for fixes.
 
+- **v0.5.0** — *2026-08-02* — Japanese and Chinese OCR support; optional `/translate` mode between English, Japanese, and Chinese; migrated from the Claude API to a self-hosted FreeLLMAPI proxy over free-tier providers
 - **v0.4.0** — *2026-08-02* — Landing page ([index.html](index.html)); dual AGPLv3/commercial licensing; expanded roadmap
 - **v0.3.1** — *2026-08-02* — Silenced the `httpx` logger so the bot token no longer leaks into request logs
 - **v0.2.0** — *2026-08-02* — Renamed entry point from `bot.py` to `main.py` (Zeabur's default Python entry point); added logo asset

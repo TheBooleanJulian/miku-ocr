@@ -2,7 +2,9 @@
 Miku OCR — a Telegram bot that reads text out of images for you.
 
 Send, paste, or forward an image and Miku will "inspect" it and hand back
-the transcribed English text in a copy-friendly code block.
+the transcribed text (English, Japanese, or Chinese) in a copy-friendly code
+block. Send /translate to have Miku translate between those three languages
+instead of just transcribing.
 
 Run:
     export TELEGRAM_BOT_TOKEN="..."
@@ -66,9 +68,23 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 llm_client = OpenAI(api_key=FREELLMAPI_API_KEY, base_url=FREELLMAPI_BASE_URL)
 
-SYSTEM_PROMPT = """You are the OCR engine behind a Telegram bot called Miku OCR.
-Your only job is to transcribe English text visible in the supplied image, exactly
-and completely, with no commentary.
+# Languages Miku can read and translate between. Keys are the codes used in
+# chat_data / the /translate command; values are the names used in prompts
+# and user-facing messages.
+LANGUAGES = {"en": "English", "ja": "Japanese", "zh": "Chinese"}
+
+# Accepted spellings for the /translate command, normalised to a LANGUAGES key.
+LANGUAGE_ALIASES = {
+    "en": "en", "eng": "en", "english": "en",
+    "ja": "ja", "jp": "ja", "jpn": "ja", "japanese": "ja",
+    "zh": "zh", "cn": "zh", "chinese": "zh", "mandarin": "zh",
+    "zh-cn": "zh", "zh-tw": "zh", "zh-hans": "zh", "zh-hant": "zh",
+}
+
+TRANSCRIBE_SYSTEM_PROMPT = """You are the OCR engine behind a Telegram bot called Miku OCR.
+Your only job is to transcribe text visible in the supplied image, exactly and
+completely, with no commentary. Supported languages are English, Japanese, and
+Chinese.
 
 Rules:
 - Output ONLY the transcribed text. No preamble, no "Here's the text:", no summary.
@@ -76,10 +92,34 @@ Rules:
   reasonably possible for plain text.
 - Do not translate, correct spelling/grammar, or paraphrase. Transcribe verbatim,
   including typos, as long as they are actually in the image.
-- If the image contains no legible English text at all, output exactly:
+- If the image contains no legible text at all, output exactly:
   [NO_TEXT_FOUND]
-- If the image contains text in a language other than English, output exactly:
-  [NON_ENGLISH_TEXT]
+- If the image contains legible text but it is not English, Japanese, or Chinese,
+  output exactly:
+  [UNSUPPORTED_LANGUAGE]
+- Ignore decorative elements, logos, and watermarks unless they contain the only
+  text present.
+- Never wrap the output in markdown code fences or quotes yourself.
+"""
+
+
+def _translate_system_prompt(target_name: str) -> str:
+    return f"""You are the OCR + translation engine behind a Telegram bot called Miku OCR.
+Your job is to read text visible in the supplied image and translate it into
+{target_name}. The image text will be in English, Japanese, or Chinese.
+
+Rules:
+- Output ONLY the {target_name} translation. No preamble, no notes, no echoing
+  the original text, no commentary.
+- If the text in the image is already in {target_name}, output it verbatim
+  (transcribed, not paraphrased) rather than "translating" it into itself.
+- Preserve original line breaks and paragraph structure as closely as
+  reasonably possible for plain text.
+- If the image contains no legible text at all, output exactly:
+  [NO_TEXT_FOUND]
+- If the image contains legible text but it is not English, Japanese, or Chinese,
+  output exactly:
+  [UNSUPPORTED_LANGUAGE]
 - Ignore decorative elements, logos, and watermarks unless they contain the only
   text present.
 - Never wrap the output in markdown code fences or quotes yourself.
@@ -148,7 +188,7 @@ def _prep_image(raw: bytes) -> tuple[bytes, str]:
     return out.getvalue(), "image/jpeg"
 
 
-def _run_ocr(image_bytes: bytes, media_type: str) -> str:
+def _run_ocr(image_bytes: bytes, media_type: str, system_prompt: str, instruction: str) -> str:
     b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     data_uri = f"data:{media_type};base64,{b64}"
 
@@ -156,13 +196,13 @@ def _run_ocr(image_bytes: bytes, media_type: str) -> str:
         model=MODEL,
         max_tokens=4096,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "Transcribe the English text in this image.",
+                        "text": instruction,
                     },
                     {
                         "type": "image_url",
@@ -193,16 +233,59 @@ LOGO_PATH = Path(__file__).parent / "assets" / "miku ocr logo v1.png"
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     caption = (
         "Hi, I'm Miku OCR! 🎤📸\n\n"
-        "Send me a photo, paste an image, or forward one from another chat, "
-        "and I'll read the English text out of it for you — copy-paste ready.\n\n"
-        "Right now I only read English. Multi-language support, translation, "
-        "table extraction, and editable docs are coming soon!"
+        "Send me a photo, paste an image, or forward one from another chat, and "
+        "I'll read the text out of it for you — copy-paste ready. I can read "
+        "English, Japanese, and Chinese.\n\n"
+        "By default I just transcribe what's in the image. Send /translate en, "
+        "/translate ja, or /translate zh to have me translate into that language "
+        "instead — /translate off switches back to transcribe-only.\n\n"
+        "Table extraction and editable docs are coming soon!"
     )
     if LOGO_PATH.exists():
         with open(LOGO_PATH, "rb") as logo:
             await update.message.reply_photo(photo=logo, caption=caption)
     else:
         await update.message.reply_text(caption)
+
+
+async def translate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_data = context.chat_data
+    args = context.args
+
+    if not args:
+        current = chat_data.get("translate_target")
+        if current:
+            await update.message.reply_text(
+                f"Translation mode is ON — Miku is translating into {LANGUAGES[current]}.\n"
+                "Use /translate off to go back to transcribe-only, or /translate "
+                "<en|ja|zh> to change the target language."
+            )
+        else:
+            await update.message.reply_text(
+                "Translation mode is OFF — Miku just transcribes text as-is.\n"
+                "Use /translate <en|ja|zh> to have Miku translate into that "
+                "language instead, e.g. /translate ja"
+            )
+        return
+
+    arg = args[0].strip().lower()
+    if arg in ("off", "none", "disable", "stop"):
+        chat_data.pop("translate_target", None)
+        await update.message.reply_text("Translation mode is OFF. Miku will transcribe text as-is again. 📝")
+        return
+
+    code = LANGUAGE_ALIASES.get(arg)
+    if not code:
+        await update.message.reply_text(
+            "Miku doesn't recognise that language. Try /translate en, "
+            "/translate ja, /translate zh, or /translate off."
+        )
+        return
+
+    chat_data["translate_target"] = code
+    await update.message.reply_text(
+        f"Translation mode is ON — Miku will translate images into {LANGUAGES[code]} from now on. 🌐"
+    )
 
 
 async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -226,6 +309,15 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not file_id:
         return
 
+    translate_target = context.chat_data.get("translate_target")
+    if translate_target:
+        target_name = LANGUAGES[translate_target]
+        system_prompt = _translate_system_prompt(target_name)
+        instruction = f"Translate the text in this image into {target_name}."
+    else:
+        system_prompt = TRANSCRIBE_SYSTEM_PROMPT
+        instruction = "Transcribe the text in this image."
+
     random = _import_random()
     await message.reply_text(random.choice(MIKU_INTROS))
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
@@ -234,7 +326,7 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         tg_file = await context.bot.get_file(file_id)
         raw = bytes(await tg_file.download_as_bytearray())
         image_bytes, media_type = _prep_image(raw)
-        text = _run_ocr(image_bytes, media_type)
+        text = _run_ocr(image_bytes, media_type, system_prompt, instruction)
     except Exception:
         logger.exception("OCR failed for chat %s", chat_id)
         await message.reply_text(
@@ -249,10 +341,10 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    if text == "[NON_ENGLISH_TEXT]":
+    if text == "[UNSUPPORTED_LANGUAGE]":
         await message.reply_text(
-            "Miku can see text in there, but it isn't English — and Miku's only "
-            "reading English for now. Multi-language support is on the way! 🌐"
+            "Miku can see text in there, but it's not English, Japanese, or "
+            "Chinese — and those are the only languages Miku reads for now. 🌐"
         )
         return
 
@@ -304,6 +396,7 @@ def main() -> None:
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", start))
+    app.add_handler(CommandHandler("translate", translate_cmd))
     app.add_handler(
         MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_image)
     )
