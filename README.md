@@ -41,6 +41,10 @@ Miku runs on a self-hosted [FreeLLMAPI](https://github.com/tashfeenahmed/freellm
 | AI | Free-tier vision models via a self-hosted [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi) proxy (OpenAI-compatible) |
 | Image processing | Pillow |
 
+## Screenshots
+
+The logo/hero image above (`assets/miku ocr logo v1.png`) is the only image asset currently in the repo. _Additional in-chat screenshots coming soon._
+
 ## Quick Start
 
 ```bash
@@ -118,8 +122,8 @@ Found a bug or have a suggestion? [Submit it here](https://forms.gle/qRCimSyoosW
 
 This project is dual licensed.
 
-- **Community Edition** — [GNU Affero General Public License v3 (AGPLv3)](LICENSE). Free to use, modify, and self-host. If you distribute a modified version or run it as a network service, you must make the corresponding source available.
-- **Commercial License** — for organisations that want to embed, modify, or distribute this software without AGPLv3's obligations. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+- Community Edition — [GNU Affero General Public License v3 (AGPLv3)](LICENSE). Free to use, modify, and self-host. If you distribute a modified version or run it as a network service, you must make the corresponding source available.
+- Commercial License — for organisations that want to embed, modify, or distribute this software without AGPLv3's obligations. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 ---
 
